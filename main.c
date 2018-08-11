@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <string.h>
+#include <errno.h>
 #include <unistd.h>
 #include <libusb-1.0/libusb.h>
 
@@ -9,6 +10,11 @@
 #include "data.c"
 
 int main(int argc, char **argv) {
+  if (argc < 2) {
+    printf("Usage: %s mode modeparams...\n", argv[0]);
+    return -1;
+  }
+
   libusb_context *ctx = NULL;
 
   int r = libusb_init(&ctx);
@@ -17,9 +23,6 @@ int main(int argc, char **argv) {
     printf("libusb_init error %d\n", r);
     return 1;
   }
-
-  libusb_set_debug(ctx, 3);
-
   libusb_device_handle *handle = NULL;
   handle = libusb_open_device_with_vid_pid(ctx, 0x1044, 0x7a39);
   if (handle == NULL) {
@@ -28,11 +31,11 @@ int main(int argc, char **argv) {
     return 1;
   }
   if (libusb_set_auto_detach_kernel_driver(handle, 0) < 0) {
-    printf("Kernel ctrl driver auto detach failed.");
+    printf("Kernel ctrl driver auto detach failed.\n");
     goto exit;
   }
   if (libusb_set_auto_detach_kernel_driver(handle, 3) < 0) {
-    printf("Kernel driver auto detach failed.");
+    printf("Kernel driver auto detach failed.\n");
     goto exit;
   }
 
@@ -49,30 +52,36 @@ int main(int argc, char **argv) {
     goto exit;
   }
 
-  r = set_mode(handle, MODE_RAINDROP, COLOR_BLUE, 0x80, 0x0a);
-  if (r < 0) {
-    printf("Failed to set mode!");
-  }
+  char* mode = argv[1];
+  if (strcmp(mode, "custom") == 0) {
+    if (argc < 3) {
+      printf("Usage: %s custom file\n", argv[0]);
+      exitcode = -1;
+      goto exit;
+    }
+    // Custom mode
+    FILE *fd = fopen(argv[2], "rb");
+    if (!fd) {
+      printf("fopen(%s) failed: %s\n", argv[2], strerror(errno));
+      exitcode = -1;
+      goto exit;
+    }
+    fread(m_white_data, 512, 1, fd);
+    fclose(fd);
 
-  sleep(1);
-  for (int i = 0; i < 128; i++) {
-    printf("Setting key %d to green!", i);
-    m_white_data[(i*4) + 2] = 0xff;
     r = set_custom_mode(handle, m_white_data);
     if (r < 0) {
-      printf("Failed to set custom mode!");
+      printf("Failed to set custom mode!\n");
+      exitcode = -1;
+      goto exit;
     }
-    m_white_data[(i*4) + 2] = 0x00;
+    exitcode = -1;
+    goto exit;
   }
-  r = set_mode(handle, MODE_STATIC, COLOR_WHITE, 0x80, 0x0a);
-  if (r < 0) {
-    printf("Failed to set white!");
-  }
-
-  libusb_release_interface(handle, 0);
-  libusb_release_interface(handle, 3);
 
 exit:
+  libusb_release_interface(handle, 0);
+  libusb_release_interface(handle, 3);
   libusb_close(handle);
   libusb_exit(ctx);
   return exitcode;
