@@ -21,4 +21,4 @@ You should be safe when using the high level `set_mode` and `set_custom_mode` fu
 You need libusb and (on debian/fedora however) libusb-dev.
 Afterwards compile with:
 
-`gcc $(pkg-config --libs --cflags libusb-1.0) main.c`
+`gcc main.c $(pkg-config --libs --cflags libusb-1.0)`
